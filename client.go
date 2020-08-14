@@ -9,6 +9,7 @@ import (
 
 type Client interface {
 	Get(path string) (string, error)
+	ProjectID() (string, error)
 }
 
 type client struct {
@@ -35,4 +36,8 @@ func (c *client) Get(path string) (string, error) {
 	}
 	bs, err := ioutil.ReadAll(resp.Body)
 	return string(bs), err
+}
+
+func (c *client) ProjectID() (string, error) {
+	return c.Get(projectIdUrl)
 }

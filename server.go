@@ -13,6 +13,7 @@ import (
 )
 
 const idTokenUrl = "/instance/service-accounts/default/identity"
+const projectIdUrl = "/project/project-id"
 
 type Server interface {
 	Run() error
@@ -24,6 +25,7 @@ type server struct {
 	gcloudPath string
 	apiKey     string
 	noKey      bool
+	projectId  string
 }
 
 type GcloudIdToken struct {
@@ -33,16 +35,7 @@ type GcloudIdToken struct {
 }
 
 func (s *server) GetGcloudIdToken() (*GcloudIdToken, error) {
-	cmd := exec.Command(s.gcloudPath, "auth", "print-identity-token", "--format", "json")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	err = cmd.Start()
-	if err != nil {
-		return nil, err
-	}
-	bs, err := ioutil.ReadAll(stdout)
+	bs, err := s.getGcloudOutput([]string{"auth", "print-identity-token"})
 	if err != nil {
 		return nil, nil
 	}
@@ -54,6 +47,31 @@ func (s *server) GetGcloudIdToken() (*GcloudIdToken, error) {
 	return token, nil
 }
 
+func (s *server) GetProjectID() (string, error) {
+	if s.projectId != "" {
+		return s.projectId, nil
+	}
+	bs, err := s.getGcloudOutput([]string{"config", "get-value", "project"})
+	if err != nil {
+		return "", err
+	}
+	return string(bs), nil
+}
+
+func (s *server) getGcloudOutput(params []string) ([]byte, error) {
+	xs := append(params, "--format", "json")
+	cmd := exec.Command(s.gcloudPath, xs...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.ReadAll(stdout)
+}
+
 func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
 	token, err := s.GetGcloudIdToken()
 	if err != nil {
@@ -62,6 +80,16 @@ func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write([]byte(token.IdToken))
+}
+
+func (s *server) handleGetProjectId(w http.ResponseWriter, r *http.Request) {
+	id, err := s.GetProjectID()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
+	_, _ = w.Write([]byte(id))
 }
 
 func generateApiKey() string {
@@ -113,6 +141,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == idTokenUrl {
 		s.handleGetIdentity(w, r)
+	} else if r.URL.Path == projectIdUrl {
+		s.handleGetProjectId(w, r)
+	} else {
+		http.NotFound(w, r)
 	}
 }
 
@@ -120,10 +152,11 @@ func (s *server) isLocal(r *http.Request) bool {
 	return r.Host == "localhost:"+s.port || r.Host == "127.0.0.1:"+s.port
 }
 
-func NewServer(port, gcloudPath string, noKey bool) Server {
+func NewServer(port, gcloudPath, projectId string, noKey bool) Server {
 	return &server{
 		port:       port,
 		gcloudPath: gcloudPath,
+		projectId:  projectId,
 		apiKey:     generateApiKey(),
 		noKey:      noKey,
 	}

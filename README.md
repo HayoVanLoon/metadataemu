@@ -6,6 +6,7 @@ server.
 Currently supports:
 
 * Getting service account ID tokens (see caveats)
+* Project ID
 
 
 ## Dependencies
