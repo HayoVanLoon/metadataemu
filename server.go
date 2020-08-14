@@ -22,10 +22,9 @@ type Server interface {
 type server struct {
 	port       string
 	gcloudPath string
+	apiKey     string
 	noKey      bool
 }
-
-var apiKey = generateApiKey()
 
 type GcloudIdToken struct {
 	AccessToken string    `json:"access_token"`
@@ -71,9 +70,12 @@ func generateApiKey() string {
 	return fmt.Sprintf("%x", h.Sum(nil))[:12]
 }
 
-func checkApiKey(r *http.Request) (bool, bool) {
+func (s *server) checkApiKey(r *http.Request) (bool, bool) {
+	if s.noKey {
+		return true, true
+	}
 	key := r.URL.Query().Get("apiKey")
-	return key == apiKey, key == ""
+	return key == s.apiKey, key == ""
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +102,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	if ok, absent := checkApiKey(r); !ok && !s.noKey {
+	if ok, absent := s.checkApiKey(r); !ok {
 		if absent {
 			w.WriteHeader(http.StatusUnauthorized)
 		} else {
@@ -119,12 +121,17 @@ func (s *server) isLocal(r *http.Request) bool {
 }
 
 func NewServer(port, gcloudPath string, noKey bool) Server {
-	return &server{port: port, gcloudPath: gcloudPath, noKey: noKey}
+	return &server{
+		port:       port,
+		gcloudPath: gcloudPath,
+		apiKey:     generateApiKey(),
+		noKey:      noKey,
+	}
 }
 
 func (s *server) Run() error {
 	if !s.noKey {
-		fmt.Printf("api key: %s\n", apiKey)
+		fmt.Printf("api key: %s\n", s.apiKey)
 	}
 	http.Handle("/", s)
 	return http.ListenAndServe(":"+s.port, nil)
