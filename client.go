@@ -39,5 +39,5 @@ func (c *client) Get(path string) (string, error) {
 }
 
 func (c *client) ProjectID() (string, error) {
-	return c.Get(projectIdUrl)
+	return c.Get(EndPointProjectId)
 }

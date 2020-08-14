@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-const idTokenUrl = "/instance/service-accounts/default/identity"
-const projectIdUrl = "/project/project-id"
+const EndPointIdToken = "/instance/service-accounts/default/identity"
+const EndPointProjectId = "/project/project-id"
 
 type Server interface {
 	Run() error
@@ -139,9 +139,9 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == idTokenUrl {
+	if r.URL.Path == EndPointIdToken {
 		s.handleGetIdentity(w, r)
-	} else if r.URL.Path == projectIdUrl {
+	} else if r.URL.Path == EndPointProjectId {
 		s.handleGetProjectId(w, r)
 	} else {
 		http.NotFound(w, r)
