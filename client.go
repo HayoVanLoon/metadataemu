@@ -18,6 +18,8 @@ type client struct {
 	real   bool
 }
 
+// Creates a new metadata client.
+// If live is set to `true`, it will return the 'real' Google metadata client.
 func NewClient(port, apiKey string, live bool) Client {
 	if live {
 		return metadata.NewClient(nil)

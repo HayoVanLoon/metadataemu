@@ -52,6 +52,8 @@ github.com/HayoVanLoon/metadataemu v0.0.0-20200814163724-87304607ce7b h1:u0CRqFE
 github.com/HayoVanLoon/metadataemu v0.0.0-20200814163724-87304607ce7b/go.mod h1:4JLkN3f0siGkPOAhSsJSjb2uqtgo4xJGn7eWRo22eIk=
 github.com/HayoVanLoon/metadataemu v0.0.0-20200814165014-dc9153e3a74e h1:tyZN7yYfa5VplEpr3rcTLOKLZrjM6jVTuWv4HyOY63E=
 github.com/HayoVanLoon/metadataemu v0.0.0-20200814165014-dc9153e3a74e/go.mod h1:mOcs7uxeRRSdTFLKE2VvFNWYlikO0nlgARlhMpp6slw=
+github.com/HayoVanLoon/metadataemu v0.0.0-20200814182556-f36ceb1d1dc5 h1:vXPteq0jzbGJ8te/18HuOFRN7/tEw1I7bDyUt6vwGEk=
+github.com/HayoVanLoon/metadataemu v0.0.0-20200814182556-f36ceb1d1dc5/go.mod h1:mOcs7uxeRRSdTFLKE2VvFNWYlikO0nlgARlhMpp6slw=
 github.com/antihax/optional v1.0.0 h1:xK2lYat7ZLaVVcIuj82J8kIro4V6kDe0AUDFboUCwcg=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=

@@ -34,7 +34,7 @@ type GcloudIdToken struct {
 	TokenExpiry time.Time `json:"token_expiry"`
 }
 
-func (s *server) GetGcloudIdToken() (*GcloudIdToken, error) {
+func (s *server) getGcloudIdToken() (*GcloudIdToken, error) {
 	bs, err := s.getGcloudOutput([]string{"auth", "print-identity-token"})
 	if err != nil {
 		return nil, nil
@@ -47,7 +47,7 @@ func (s *server) GetGcloudIdToken() (*GcloudIdToken, error) {
 	return token, nil
 }
 
-func (s *server) GetProjectID() (string, error) {
+func (s *server) getProjectID() (string, error) {
 	if s.projectId != "" {
 		return s.projectId, nil
 	}
@@ -73,7 +73,7 @@ func (s *server) getGcloudOutput(params []string) ([]byte, error) {
 }
 
 func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
-	token, err := s.GetGcloudIdToken()
+	token, err := s.getGcloudIdToken()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
@@ -83,7 +83,7 @@ func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleGetProjectId(w http.ResponseWriter, r *http.Request) {
-	id, err := s.GetProjectID()
+	id, err := s.getProjectID()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
@@ -152,6 +152,7 @@ func (s *server) isLocal(r *http.Request) bool {
 	return r.Host == "localhost:"+s.port || r.Host == "127.0.0.1:"+s.port
 }
 
+// Creates a new metadata server.
 func NewServer(port, gcloudPath, projectId string, noKey bool) Server {
 	return &server{
 		port:       port,
@@ -162,6 +163,7 @@ func NewServer(port, gcloudPath, projectId string, noKey bool) Server {
 	}
 }
 
+// Starts the local metadata server.
 func (s *server) Run() error {
 	if !s.noKey {
 		fmt.Printf("api key: %s\n", s.apiKey)
