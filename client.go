@@ -20,7 +20,7 @@ type client struct {
 
 func NewClient(port, apiKey string, live bool) Client {
 	if live {
-		return &metadata.Client{}
+		return metadata.NewClient(nil)
 	}
 	return &client{port: port, apiKey: apiKey}
 }
