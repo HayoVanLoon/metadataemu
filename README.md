@@ -41,7 +41,8 @@ import github.com/HayoVanLoon/metadataemu
 
 ...
 
-id, err := metadata.NewClient("http://localhost:9000", "my-api-key", false).ProjectID()
+client := metadata.NewClient("http://localhost:9000", "my-api-key", false)
+projectId, err := client.ProjectID()
 ```
 
 The official Google metadata library might also work (for supported endpoints). 
