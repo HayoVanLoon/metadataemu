@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"strings"
 )
 
 type Client interface {
@@ -13,25 +15,36 @@ type Client interface {
 }
 
 type client struct {
-	port   string
+	scheme string
 	apiKey string
 	real   bool
 }
 
-// Creates a new metadata client.
-// If live is set to `true`, it will return the 'real' Google metadata client.
-func NewClient(port, apiKey string, live bool) Client {
+// NewClient creates a new metadata client.
+// If scheme is left empty, it will try to use environment variable
+// `GCE_METADATA_HOST`.
+// If live is set to `true`, port and apiKey will be ignored and the 'real'
+// Google metadata client is returned.
+func NewClient(scheme, apiKey string, live bool) Client {
 	if live {
 		return metadata.NewClient(nil)
 	}
-	return &client{port: port, apiKey: apiKey}
+	if scheme == "" {
+		// Use same environment parameter as real client
+		scheme = fmt.Sprintf("http://%s", os.Getenv("GCE_METADATA_HOST"))
+	}
+	return &client{scheme: scheme, apiKey: apiKey}
 }
 
 func (c *client) Get(path string) (string, error) {
-	if c.apiKey == "" {
-		return "", nil
+	url := fmt.Sprintf("%s%s%s", c.scheme, ComputeEnginePrefix, path)
+	if c.apiKey != "" {
+		sep := "?"
+		if strings.Contains(path, "?") {
+			sep = "&"
+		}
+		url = fmt.Sprintf("%s%sapiKey=%s", url, sep, c.apiKey)
 	}
-	url := fmt.Sprintf("http://localhost:%s%s&apiKey=%s", c.port, path, c.apiKey)
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("could not query metadata emulator: %s", err)

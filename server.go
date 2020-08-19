@@ -9,11 +9,17 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"strings"
 	"time"
 )
 
-const EndPointIdToken = "/instance/service-accounts/default/identity"
-const EndPointProjectId = "/project/project-id"
+// Use 'real' metadata paths
+// Source: https://cloud.google.com/compute/docs/storing-retrieving-metadata
+const (
+	ComputeEnginePrefix = "/computeEngine/v1"
+	EndPointIdToken     = ComputeEnginePrefix + "/instance/service-accounts/default/identity"
+	EndPointProjectId   = ComputeEnginePrefix + "/project/project-id"
+)
 
 type Server interface {
 	Run() error
@@ -35,14 +41,14 @@ type GcloudIdToken struct {
 }
 
 func (s *server) getGcloudIdToken() (*GcloudIdToken, error) {
-	bs, err := s.getGcloudOutput([]string{"auth", "print-identity-token"})
+	bs, err := s.getGcloudOutput([]string{"auth", "print-identity-token", "--format", "json"})
 	if err != nil {
 		return nil, nil
 	}
 	token := &GcloudIdToken{}
 	err = json.Unmarshal(bs, token)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	return token, nil
 }
@@ -55,12 +61,12 @@ func (s *server) getProjectID() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(bs), nil
+	str := strings.TrimSpace(string(bs))
+	return str, nil
 }
 
 func (s *server) getGcloudOutput(params []string) ([]byte, error) {
-	xs := append(params, "--format", "json")
-	cmd := exec.Command(s.gcloudPath, xs...)
+	cmd := exec.Command(s.gcloudPath, params...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -112,13 +118,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Printf("recovered from panic: %s", r)
 		}
 	}()
+	log.Printf("%s requested %s", r.RemoteAddr, r.URL.Path)
 
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Header().Add("allow", http.MethodGet)
-		return
-	}
 	if !s.isLocal(r) {
+		// be rude, drop connection if supported
 		if wr, ok := w.(http.Hijacker); ok {
 			conn, _, err := wr.Hijack()
 			if err == nil {
@@ -128,6 +131,11 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Header().Add("allow", http.MethodGet)
 		return
 	}
 	if ok, absent := s.checkApiKey(r); !ok {
@@ -144,6 +152,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if r.URL.Path == EndPointProjectId {
 		s.handleGetProjectId(w, r)
 	} else {
+		fmt.Println(r.URL.Path)
 		http.NotFound(w, r)
 	}
 }
@@ -165,8 +174,11 @@ func NewServer(port, gcloudPath, projectId string, noKey bool) Server {
 
 // Starts the local metadata server.
 func (s *server) Run() error {
-	if !s.noKey {
-		fmt.Printf("api key: %s\n", s.apiKey)
+	fmt.Printf("metadata server listening on: http://localhost:%s\n", s.port)
+	if s.noKey {
+		fmt.Println("no api key required; this is unsafe on open networks")
+	} else {
+		fmt.Printf("api key (refreshes on restart): %s\n", s.apiKey)
 	}
 	http.Handle("/", s)
 	return http.ListenAndServe(":"+s.port, nil)

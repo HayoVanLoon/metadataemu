@@ -1,12 +1,14 @@
 # Google Cloud Metadata Emulator
 
 Provides (part of) the functionality of the Compute Engine instance metadata
-server. 
+server. The server wraps around the `gcloud` command line tool.
 
 Currently supports:
 
 * Getting service account ID tokens (see caveats)
+  `computeEngine/v1/instance/service-accounts/default/identity`
 * Project ID
+  `computeEngine/v1/project/project-id`
 
 
 ## Dependencies
@@ -15,7 +17,7 @@ Currently supports:
 * Go (1.13 and up)
 
 
-## Run
+## Run the Server
 
 Start a server with default options:
 ```shell script
@@ -26,6 +28,26 @@ To see all available command line options:
 ```shell script
 go run local/server.go -help
 ```
+
+## Use the Server
+
+```shell script
+curl  http://localhost:9000/computeEngine/v1/project/project-id
+```
+
+Using the Go client library:
+```go
+import github.com/HayoVanLoon/metadataemu
+
+...
+
+id, err := metadata.NewClient("http://localhost:9000", "my-api-key", false).ProjectID()
+```
+
+The official Google metadata library might also work (for supported endpoints). 
+It uses the environment variable `GCE_METADATA_HOST`, so setting this to the 
+server host (i.e. `localhost:9000`) might work. This has not yet been tested.
+
 
 ## Caveats
 
