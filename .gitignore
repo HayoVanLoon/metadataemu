@@ -49,15 +49,12 @@
 **/dist
 
 **/tmp
+**/etc
+
 **/secrets
 **.credentials
 **.credentials.json
 
-################################
-# Incentro Template Artifacts
-################################
-project.sh
-way-of-working.md
 personal-envs.sh
 
 ################################

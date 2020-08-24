@@ -1,0 +1,7 @@
+{
+  "port": "9000",
+  "gcloudPath": "your-path-to-gcloud",
+  "noKey": false,
+  "projectId": "your-project-id or: leave empty to use the gcloud project",
+  "serviceAccount": "your-service-account@your-project.iam.gserviceaccount.com"
+}

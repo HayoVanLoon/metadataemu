@@ -3,12 +3,16 @@
 Provides (part of) the functionality of the Compute Engine instance metadata
 server. The server wraps around the `gcloud` command line tool.
 
-Currently supports:
+Supports functionality:
 
 * Getting service account ID tokens (see caveats)
-  `computeEngine/v1/instance/service-accounts/default/identity`
 * Project ID
-  `computeEngine/v1/project/project-id`
+
+Supported endpoints:
+
+* `computeEngine/v1/instance/service-accounts/default/identity`
+* `computeEngine/v1/instance/service-accounts/<service account>/identity`
+* `computeEngine/v1/project/project-id`
 
 
 ## Dependencies
@@ -41,7 +45,7 @@ import github.com/HayoVanLoon/metadataemu
 
 ...
 
-client := metadata.NewClient("http://localhost:9000", "my-api-key", false)
+client := metadata.NewClient("http://localhost:9000", "my-api-key", false, "my-service-account")
 projectId, err := client.ProjectID()
 ```
 
@@ -55,5 +59,6 @@ server host (i.e. `localhost:9000`) might work. This has not yet been tested.
 * The GCP instance metadata runs in a private network. This server might not. 
 Hence an apiKey query parameter must be added in calls to this server. It is 
 printed to the console on server start-up and refreshes on server restart.
-* The provided identity token does not limit the audience (yet). Never, ever 
-send this token to an untrusted source or over an untrusted medium. 
+* When no service account is set and no audience is added, the users default 
+identity token is used and the audience is not limited. Never, ever send this 
+token to an untrusted source or over an untrusted medium. 
