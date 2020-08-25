@@ -22,7 +22,7 @@ const (
 	EndPointProjectId       = ComputeMetadataPrefix + "/project/project-id"
 )
 
-var regexServiceAccount = regexp.MustCompile(`^/computeMetadata/v1/instance/service-accounts/([^/]+)(/.+)?`)
+var regexServiceAccount = regexp.MustCompile(`^/computeMetadata/v1/instance/service-accounts/([^/]+)(/(.+))?`)
 
 type Server interface {
 	Run() error
