@@ -22,7 +22,7 @@ const (
 	EndPointProjectId       = ComputeMetadataPrefix + "/project/project-id"
 )
 
-var regexServiceAccount = regexp.MustCompile(`^/computeMetadata/v1/instance/service-accounts/([^/]+)(/(.+))?`)
+var regexServiceAccount = regexp.MustCompile(`^/computeMetadata/v1/instance/service-accounts/([^/]+)(/[^/]+)?`)
 
 type Server interface {
 	Run() error
@@ -104,17 +104,20 @@ func (s *server) getGcloudOutput(params []string) ([]byte, error) {
 	return ioutil.ReadAll(stdout)
 }
 
-func (s *server) handleServiceAccount(w http.ResponseWriter, r *http.Request) {
-	// TODO(hvl): only supporting
-	s.handleGetIdentity(w, r)
+func (s *server) handleServiceAccount(w http.ResponseWriter, r *http.Request, tail []string) {
+	if len(tail) < 2 {
+		http.NotFound(w, r)
+		return
+	}
+	sa := tail[0]
+	if matches(true, tail, sa, "identity") {
+		s.handleGetIdentity(w, r, sa)
+		return
+	}
+	http.NotFound(w, r)
 }
 
-func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
-	sam := regexServiceAccount.FindAllStringSubmatch(r.URL.Path, -1)
-	sa := ""
-	if len(sam) == 1 || len(sam[0]) >= 2 {
-		sa = sam[0][1]
-	}
+func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request, sa string) {
 	aud := r.URL.Query().Get("audience")
 	if aud != "" && sa == "" {
 		msg := "need both service account and audience (or none at all)"
@@ -197,14 +200,32 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.HasPrefix(r.URL.Path, EndPointServiceAccounts) {
-		s.handleServiceAccount(w, r)
-	} else if r.URL.Path == EndPointProjectId {
+	if !strings.HasPrefix(r.URL.Path, ComputeMetadataPrefix) {
+		http.NotFound(w, r)
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")[3:]
+	if matches(false, parts, "instance", "service-accounts") {
+		s.handleServiceAccount(w, r, parts[2:])
+	} else if matches(true, parts, "project", "project-id") {
 		s.handleGetProjectId(w, r)
 	} else {
 		log.Printf("not found: %s", r.URL.Path)
 		http.NotFound(w, r)
 	}
+}
+
+func matches(exact bool, ss []string, target ...string) bool {
+	if len(ss) < len(target) {
+		return false
+	}
+	for i := range target {
+		if ss[i] != target[i] {
+			return false
+		}
+	}
+	return !exact || len(ss) == len(target)
 }
 
 func (s *server) isLocal(r *http.Request) bool {
