@@ -10,9 +10,9 @@ Supports functionality:
 
 Supported endpoints:
 
-* `computeEngine/v1/instance/service-accounts/default/identity`
-* `computeEngine/v1/instance/service-accounts/<service account>/identity`
-* `computeEngine/v1/project/project-id`
+* `computeMetadata/v1/instance/service-accounts/default/identity`
+* `computeMetadata/v1/instance/service-accounts/<service account>/identity`
+* `computeMetadata/v1/project/project-id`
 
 
 ## Dependencies

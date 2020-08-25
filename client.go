@@ -37,7 +37,7 @@ func NewClient(scheme, apiKey string, live bool) Client {
 }
 
 func (c *client) Get(path string) (string, error) {
-	url := fmt.Sprintf("%s%s%s", c.scheme, ComputeEnginePrefix, path)
+	url := fmt.Sprintf("%s%s%s", c.scheme, ComputeMetadataPrefix, path)
 	if c.apiKey != "" {
 		sep := "?"
 		if strings.Contains(path, "?") {

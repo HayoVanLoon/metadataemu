@@ -17,12 +17,12 @@ import (
 // Use 'real' metadata paths
 // Source: https://cloud.google.com/compute/docs/storing-retrieving-metadata
 const (
-	ComputeEnginePrefix     = "/computeEngine/v1"
-	EndPointServiceAccounts = ComputeEnginePrefix + "/instance/service-accounts"
-	EndPointProjectId       = ComputeEnginePrefix + "/project/project-id"
+	ComputeMetadataPrefix   = "/computeMetadata/v1"
+	EndPointServiceAccounts = ComputeMetadataPrefix + "/instance/service-accounts"
+	EndPointProjectId       = ComputeMetadataPrefix + "/project/project-id"
 )
 
-var regexServiceAccount = regexp.MustCompile(`^/computeEngine/v1/instance/service-accounts/([^/]+)(/.+)?`)
+var regexServiceAccount = regexp.MustCompile(`^/computeMetadata/v1/instance/service-accounts/([^/]+)(/.+)?`)
 
 type Server interface {
 	Run() error
@@ -110,7 +110,7 @@ func (s *server) handleServiceAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
-	sam := regexServiceAccount.FindAllStringSubmatch(r.URL.Path, 2)
+	sam := regexServiceAccount.FindAllStringSubmatch(r.URL.Path, -1)
 	sa := ""
 	if len(sam) == 1 || len(sam[0]) >= 2 {
 		sa = sam[0][1]
