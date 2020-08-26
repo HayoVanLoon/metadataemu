@@ -6,12 +6,15 @@ server. The server wraps around the `gcloud` command line tool.
 Supports functionality:
 
 * Getting service account ID tokens (see caveats)
+* Active account email
 * Project ID
 
 Supported endpoints:
 
 * `computeMetadata/v1/instance/service-accounts/default/identity`
 * `computeMetadata/v1/instance/service-accounts/<service account>/identity`
+* `computeMetadata/v1/instance/service-accounts/default/email`
+* `computeMetadata/v1/instance/service-accounts/<service account>/email`
 * `computeMetadata/v1/project/project-id`
 
 

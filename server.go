@@ -68,7 +68,7 @@ func (s *server) getGcloudIdToken(sa, audience string) (*GcloudIdToken, error) {
 	}
 	bs, err := s.getGcloudOutput(append(ps, "--format=json"))
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	token := &GcloudIdToken{}
 	err = json.Unmarshal(bs, token)
@@ -105,12 +105,16 @@ func (s *server) getGcloudOutput(params []string) ([]byte, error) {
 }
 
 func (s *server) handleServiceAccount(w http.ResponseWriter, r *http.Request, tail []string) {
+	// TODO(hvl): check special character handling to be in line with real metadata (aka: @)
 	if len(tail) < 2 {
 		http.NotFound(w, r)
 		return
 	}
 	sa := tail[0]
-	if matches(true, tail, sa, "identity") {
+	if matches(true, tail, sa, "email") {
+		s.handleGetAccountEmail(w, r, sa)
+		return
+	} else if matches(true, tail, sa, "identity") {
 		s.handleGetIdentity(w, r, sa)
 		return
 	}
@@ -134,6 +138,22 @@ func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request, sa st
 		return
 	}
 	_, _ = w.Write([]byte(token.IdToken))
+}
+
+func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request, sa string) {
+	if sa != "default" {
+		_, _ = w.Write([]byte(sa))
+		return
+	}
+	ps := []string{"config", "get-value", "account"}
+	bs, err := s.getGcloudOutput(ps)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
+	str := strings.TrimSpace(string(bs))
+	_, _ = w.Write([]byte(str))
 }
 
 func (s *server) handleGetProjectId(w http.ResponseWriter, r *http.Request) {
