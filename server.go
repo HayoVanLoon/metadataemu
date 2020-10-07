@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"github.com/HayoVanLoon/go-commons/treemux"
+	gchttp "github.com/HayoVanLoon/go-commons/http"
 	"github.com/google/uuid"
 	"io/ioutil"
 	"log"
@@ -219,7 +219,7 @@ func (s *server) checkApiKey(r *http.Request) (bool, bool) {
 }
 
 func (s *server) filter(fn func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
-	f := func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("recovered from panic: %s", r)
@@ -266,7 +266,6 @@ func (s *server) filter(fn func(w http.ResponseWriter, r *http.Request)) func(w 
 
 		fn(w, r)
 	}
-	return f
 }
 
 func (s *server) isLocal(r *http.Request) bool {
@@ -334,7 +333,7 @@ func (s *server) Run() error {
 
 	fmt.Println()
 
-	tm := treemux.NewTreeMux(nil)
+	tm := gchttp.NewTreeMux(nil)
 	tm.HandleFunc("/computeMetadata/v1/project/project-id", s.filter(s.handleGetProjectId))
 	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/email", s.filter(s.handleGetAccountEmail))
 	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/identity", s.filter(s.handleGetIdentity))
