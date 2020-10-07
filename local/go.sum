@@ -50,6 +50,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/BurntSushi/xgb v0.0.0-20200324125942-20f126ea2843 h1:3iF31c7rp7nGZVDv7YQ+VxOgpipVfPKotLXykjZmwM8=
 github.com/BurntSushi/xgb v0.0.0-20200324125942-20f126ea2843/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
+github.com/HayoVanLoon/go-commons v0.0.0-20201007125127-43101b510dd6 h1:yE4n2VgA0Eo79sKU384sF63ZV62B64M90a0TgK9GlSQ=
+github.com/HayoVanLoon/go-commons v0.0.0-20201007125127-43101b510dd6/go.mod h1:Bgdj8g8+Rmio6prHET11uvPv+UOTdQHR0/OqSFLXrAY=
 github.com/HayoVanLoon/metadataemu v0.0.0-20200814163724-87304607ce7b h1:u0CRqFE3lcbbs8Or9/lLXoRfzsHTx0IH/IYywcMn/5s=
 github.com/HayoVanLoon/metadataemu v0.0.0-20200814163724-87304607ce7b/go.mod h1:4JLkN3f0siGkPOAhSsJSjb2uqtgo4xJGn7eWRo22eIk=
 github.com/HayoVanLoon/metadataemu v0.0.0-20200814165014-dc9153e3a74e h1:tyZN7yYfa5VplEpr3rcTLOKLZrjM6jVTuWv4HyOY63E=

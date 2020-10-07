@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/HayoVanLoon/go-commons/treemux"
 	"github.com/google/uuid"
 	"io/ioutil"
 	"log"
@@ -26,7 +27,6 @@ var regexServiceAccount = regexp.MustCompile(`^/computeMetadata/v1/instance/serv
 
 type Server interface {
 	Run() error
-	http.Handler
 }
 
 type ServerConfig struct {
@@ -52,6 +52,12 @@ type GcloudIdToken struct {
 	TokenExpiry time.Time `json:"token_expiry"`
 }
 
+type AccessToken struct {
+	AccessToken  string `json:"access_token"`
+	ExpiresInSec int    `json:"expires_in"`
+	TokenType    string `json:"token_type"`
+}
+
 func (s *server) getGcloudIdToken(sa, audience string) (*GcloudIdToken, error) {
 	ps := []string{"auth", "print-identity-token"}
 	if sa != "default" && audience != "" {
@@ -71,6 +77,32 @@ func (s *server) getGcloudIdToken(sa, audience string) (*GcloudIdToken, error) {
 		return nil, err
 	}
 	token := &GcloudIdToken{}
+	err = json.Unmarshal(bs, token)
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+func (s *server) getGcloudAccessToken(sa, audience string) (*AccessToken, error) {
+	ps := []string{"auth", "print-access-token"}
+	if sa != "default" && audience != "" {
+		if sa == "" {
+			sa = s.serviceAccount
+		}
+		if sa == "" {
+			return nil, fmt.Errorf("need service account for audiences, please specify one or set server default")
+		}
+		ps = append(ps,
+			fmt.Sprintf("--audiences=%s", audience),
+			fmt.Sprintf("--impersonate-service-account=%s", sa),
+		)
+	}
+	bs, err := s.getGcloudOutput(append(ps, "--format=json"))
+	if err != nil {
+		return nil, err
+	}
+	token := &AccessToken{}
 	err = json.Unmarshal(bs, token)
 	if err != nil {
 		return nil, err
@@ -104,24 +136,8 @@ func (s *server) getGcloudOutput(params []string) ([]byte, error) {
 	return ioutil.ReadAll(stdout)
 }
 
-func (s *server) handleServiceAccount(w http.ResponseWriter, r *http.Request, tail []string) {
-	// TODO(hvl): check special character handling to be in line with real metadata (aka: @)
-	if len(tail) < 2 {
-		http.NotFound(w, r)
-		return
-	}
-	sa := tail[0]
-	if matches(true, tail, sa, "email") {
-		s.handleGetAccountEmail(w, r, sa)
-		return
-	} else if matches(true, tail, sa, "identity") {
-		s.handleGetIdentity(w, r, sa)
-		return
-	}
-	http.NotFound(w, r)
-}
-
-func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request, sa string) {
+func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
+	sa := strings.Split(r.URL.Path, "/")[5]
 	aud := r.URL.Query().Get("audience")
 	if aud != "" && sa == "" {
 		msg := "need both service account and audience (or none at all)"
@@ -140,7 +156,29 @@ func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request, sa st
 	_, _ = w.Write([]byte(token.IdToken))
 }
 
-func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request, sa string) {
+func (s *server) handleGetToken(w http.ResponseWriter, r *http.Request) {
+	sa := strings.Split(r.URL.Path, "/")[5]
+	aud := r.URL.Query().Get("audience")
+	if aud != "" && sa == "" {
+		msg := "need both service account and audience (or none at all)"
+		log.Printf(msg)
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(msg))
+		return
+	}
+
+	token, err := s.getGcloudAccessToken(sa, aud)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
+	bs, _ := json.Marshal(token)
+	_, _ = w.Write(bs)
+}
+
+func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request) {
+	sa := strings.Split(r.URL.Path, "/")[5]
 	if sa != "default" {
 		_, _ = w.Write([]byte(sa))
 		return
@@ -180,75 +218,59 @@ func (s *server) checkApiKey(r *http.Request) (bool, bool) {
 	return key == s.apiKey, key == ""
 }
 
-func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("recovered from panic: %s", r)
-		}
-	}()
-	log.Printf("%s requested %s", r.RemoteAddr, r.URL.Path)
+func (s *server) filter(fn func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	f := func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("recovered from panic: %s", r)
+			}
+		}()
+		log.Printf("%s requested %s", r.RemoteAddr, r.URL.Path)
 
-	if !s.isLocal(r) {
-		log.Printf("forbidden: non-local origin")
-		// be rude, drop connection if supported
-		if wr, ok := w.(http.Hijacker); ok {
-			conn, _, err := wr.Hijack()
-			if err == nil {
-				if err = conn.Close(); err == nil {
-					return
+		if !s.isLocal(r) {
+			log.Printf("forbidden: non-local origin")
+			// be rude, drop connection if supported
+			if wr, ok := w.(http.Hijacker); ok {
+				conn, _, err := wr.Hijack()
+				if err == nil {
+					if err = conn.Close(); err == nil {
+						return
+					}
 				}
 			}
-		}
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-	if r.Method != http.MethodGet {
-		// only allow GET requests
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Header().Add("allow", http.MethodGet)
-		log.Printf("405 due to %s on %s", r.Method, r.URL.Path)
-		return
-	}
-	if ok, absent := s.checkApiKey(r); !ok {
-		if absent {
-			log.Printf("unauthorised: no api key")
-			w.WriteHeader(http.StatusUnauthorized)
-		} else {
-			log.Printf("forbidden: incorrect api key")
 			w.WriteHeader(http.StatusForbidden)
+			return
 		}
-		return
-	}
-
-	if !strings.HasPrefix(r.URL.Path, ComputeMetadataPrefix) {
-		http.NotFound(w, r)
-		return
-	}
-
-	parts := strings.Split(r.URL.Path, "/")[3:]
-	if matches(false, parts, "instance", "service-accounts") {
-		s.handleServiceAccount(w, r, parts[2:])
-	} else if matches(true, parts, "project", "project-id") {
-		s.handleGetProjectId(w, r)
-	} else {
-		log.Printf("not found: %s", r.URL.Path)
-		http.NotFound(w, r)
-	}
-}
-
-func matches(exact bool, ss []string, target ...string) bool {
-	if len(ss) < len(target) {
-		return false
-	}
-	for i := range target {
-		if ss[i] != target[i] {
-			return false
+		if r.Method != http.MethodGet {
+			// only allow GET requests
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Header().Add("allow", http.MethodGet)
+			log.Printf("405 due to %s on %s", r.Method, r.URL.Path)
+			return
 		}
+		if ok, absent := s.checkApiKey(r); !ok {
+			if absent {
+				log.Printf("unauthorised: no api key")
+				w.WriteHeader(http.StatusUnauthorized)
+			} else {
+				log.Printf("forbidden: incorrect api key")
+				w.WriteHeader(http.StatusForbidden)
+			}
+			return
+		}
+
+		if !strings.HasPrefix(r.URL.Path, ComputeMetadataPrefix) {
+			http.NotFound(w, r)
+			return
+		}
+
+		fn(w, r)
 	}
-	return !exact || len(ss) == len(target)
+	return f
 }
 
 func (s *server) isLocal(r *http.Request) bool {
+	// TODO(hvl): wonky
 	return r.Host == "localhost:"+s.port || r.Host == "127.0.0.1:"+s.port
 }
 
@@ -312,6 +334,12 @@ func (s *server) Run() error {
 
 	fmt.Println()
 
-	http.Handle("/", s)
+	tm := treemux.NewTreeMux(nil)
+	tm.HandleFunc("/computeMetadata/v1/project/project-id", s.filter(s.handleGetProjectId))
+	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/email", s.filter(s.handleGetAccountEmail))
+	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/identity", s.filter(s.handleGetIdentity))
+	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/token", s.filter(s.handleGetToken))
+
+	http.Handle("/", tm)
 	return http.ListenAndServe(":"+s.port, nil)
 }
