@@ -18,6 +18,7 @@ func main() {
 	projectId := flag.String("project", "", "overrides gcloud's current project id")
 	noKey := flag.Bool("no-key", false, "do not require API key (discouraged)")
 	serviceAccount := flag.String("service-account", "", "service account to impersonate (required when using audience)")
+	serviceAccountId := flag.String("service-account-id", "", "prefix of service account to impersonate (required when using audience)")
 	configFile := flag.String("config-file", "", "path to config file")
 	flag.Parse()
 
@@ -47,8 +48,22 @@ func main() {
 	if *noKey {
 		conf.NoKey = *noKey
 	}
+
 	if *serviceAccount != "" {
 		conf.ServiceAccount = *serviceAccount
+	}
+	if *serviceAccountId != "" {
+		conf.ServiceAccountId = *serviceAccountId
+	}
+
+	if conf.ServiceAccountId != "" {
+		if conf.ProjectId == "" {
+			log.Println("Service account id has been specified but project has not. Ignoring service account id.")
+		} else if conf.ServiceAccount != "" {
+			log.Println("Both service account and service account id have been specified. Ignoring Service-Account-Id")
+		} else {
+			conf.ServiceAccount = fmt.Sprintf("%s@%s.iam.gserviceaccount.com", conf.ServiceAccountId, conf.ProjectId)
+		}
 	}
 
 	if conf.GcloudPath == "" {
