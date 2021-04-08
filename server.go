@@ -23,6 +23,11 @@ const (
 	EndPointProjectId       = ComputeMetadataPrefix + "/project/project-id"
 )
 
+const (
+	HeaderMetadataFlavour      = "metadata-flavor"
+	HeaderMetadataFlavourValue = "Google"
+)
+
 var regexServiceAccount = regexp.MustCompile(`^/computeMetadata/v1/instance/service-accounts/([^/]+)(/[^/]+)?`)
 
 type Server interface {
@@ -138,7 +143,6 @@ func (s *server) getGcloudOutput(params []string) ([]byte, error) {
 }
 
 func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
 	sa := strings.Split(r.URL.Path, "/")[5]
 	aud := r.URL.Query().Get("audience")
 	if aud != "" && sa == "" {
@@ -155,11 +159,12 @@ func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
+
+	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
 	_, _ = w.Write([]byte(token.IdToken))
 }
 
 func (s *server) handleGetToken(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
 	sa := strings.Split(r.URL.Path, "/")[5]
 	aud := r.URL.Query().Get("audience")
 	if aud != "" && sa == "" {
@@ -177,11 +182,12 @@ func (s *server) handleGetToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bs, _ := json.Marshal(token)
+
+	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
 	_, _ = w.Write(bs)
 }
 
 func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
 	sa := strings.Split(r.URL.Path, "/")[5]
 	if sa != "default" {
 		_, _ = w.Write([]byte(sa))
@@ -195,17 +201,21 @@ func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	str := strings.TrimSpace(string(bs))
+
+	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
 	_, _ = w.Write([]byte(str))
 }
 
 func (s *server) handleGetProjectId(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
 	id, err := s.getProjectID()
 	if err != nil {
+		w.Header().Add("metadata-flavor", "Google")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
+
+	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
 	_, _ = w.Write([]byte(id))
 }
 
@@ -313,6 +323,16 @@ func NewServerFromConfigFile(path string) (Server, error) {
 	return NewServerFromConfig(conf), nil
 }
 
+func notFound(w http.ResponseWriter, r *http.Request) {
+	log.Printf("not found: %s", r.URL)
+}
+
+func pong(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL)
+	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
+	w.WriteHeader(http.StatusOK)
+}
+
 // Starts the local metadata server.
 func (s *server) Run() error {
 	fmt.Printf("\nmetadata server listening on:\thttp://localhost:%s\n", s.port)
@@ -338,11 +358,14 @@ func (s *server) Run() error {
 
 	fmt.Println()
 
-	tm := gchttp.NewTreeMux(nil)
+	tm := gchttp.NewTreeMux(s.filter(notFound))
 	tm.HandleFunc("/computeMetadata/v1/project/project-id", s.filter(s.handleGetProjectId))
 	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/email", s.filter(s.handleGetAccountEmail))
 	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/identity", s.filter(s.handleGetIdentity))
 	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/token", s.filter(s.handleGetToken))
+
+	// pinged by Python GCE metadata
+	tm.HandleFunc("/", s.filter(pong))
 
 	http.Handle("/", tm)
 	return http.ListenAndServe(":"+s.port, nil)
