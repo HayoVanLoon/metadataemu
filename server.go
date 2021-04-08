@@ -30,11 +30,12 @@ type Server interface {
 }
 
 type ServerConfig struct {
-	Port           string `json:"port"`
-	GcloudPath     string `json:"gcloudPath,omitempty"`
-	NoKey          bool   `json:"noKey,omitempty"`
-	ProjectId      string `json:"projectId,omitempty"`
-	ServiceAccount string `json:"serviceAccount,omitempty"`
+	Port             string `json:"port"`
+	GcloudPath       string `json:"gcloudPath,omitempty"`
+	NoKey            bool   `json:"noKey,omitempty"`
+	ProjectId        string `json:"projectId,omitempty"`
+	ServiceAccount   string `json:"serviceAccount,omitempty"`
+	ServiceAccountId string `json:"serviceAccountId,omitempty"`
 }
 
 type server struct {
@@ -137,6 +138,7 @@ func (s *server) getGcloudOutput(params []string) ([]byte, error) {
 }
 
 func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL)
 	sa := strings.Split(r.URL.Path, "/")[5]
 	aud := r.URL.Query().Get("audience")
 	if aud != "" && sa == "" {
@@ -157,6 +159,7 @@ func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleGetToken(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL)
 	sa := strings.Split(r.URL.Path, "/")[5]
 	aud := r.URL.Query().Get("audience")
 	if aud != "" && sa == "" {
@@ -178,6 +181,7 @@ func (s *server) handleGetToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL)
 	sa := strings.Split(r.URL.Path, "/")[5]
 	if sa != "default" {
 		_, _ = w.Write([]byte(sa))
@@ -195,6 +199,7 @@ func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleGetProjectId(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL)
 	id, err := s.getProjectID()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
