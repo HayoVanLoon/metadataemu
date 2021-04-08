@@ -19,4 +19,7 @@ run-with-config:
 		-gcloud-path=$(GCLOUD_PATH)
 
 unsafe:
-	go run local/server.go -port=$(PORT) -gcloud-path=$(GCLOUD_PATH) -no-key=true
+	go run local/server.go \
+		-port=$(PORT) \
+		-gcloud-path=$(GCLOUD_PATH) \
+		-no-key=true
