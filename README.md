@@ -1,7 +1,7 @@
 # Google Cloud Metadata Emulator
 
 Provides (part of) the functionality of the Compute Engine instance metadata
-server. The server wraps around the `gcloud` command line tool.
+server. The server wraps around the Google Cloud SDK.
 
 Supports functionality:
 

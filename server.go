@@ -1,16 +1,16 @@
 package metadataemu
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	gchttp "github.com/HayoVanLoon/go-commons/http"
 	"github.com/google/uuid"
+	"golang.org/x/oauth2/google"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -25,14 +25,11 @@ const (
 
 const (
 	HeaderMetadataFlavour      = "metadata-flavor"
-	HeaderMetadataFlavourValue = "Google"
+	HeaderValueMetadataFlavour = "Google"
+	HeaderContentType          = "content-type"
+	HeaderValueTextPlain       = "text/plain"
+	HeaderValueApplicationJson = "application/json"
 )
-
-var regexServiceAccount = regexp.MustCompile(`^/computeMetadata/v1/instance/service-accounts/([^/]+)(/[^/]+)?`)
-
-type Server interface {
-	Run() error
-}
 
 type ServerConfig struct {
 	Port             string `json:"port"`
@@ -43,6 +40,10 @@ type ServerConfig struct {
 	ServiceAccountId string `json:"serviceAccountId,omitempty"`
 }
 
+type Server interface {
+	Run() error
+}
+
 type server struct {
 	port           string
 	gcloudPath     string
@@ -50,6 +51,41 @@ type server struct {
 	noKey          bool
 	projectId      string
 	serviceAccount string
+}
+
+// NewServer creates a new metadata server.
+func NewServer(port, gcloudPath, projectId string, noKey bool, serviceAccount string) Server {
+	apiKey := ""
+	if !noKey {
+		apiKey = generateApiKey()
+	}
+	return &server{
+		port:           port,
+		gcloudPath:     gcloudPath,
+		projectId:      projectId,
+		apiKey:         apiKey,
+		noKey:          noKey,
+		serviceAccount: serviceAccount,
+	}
+}
+
+// NewServerFromConfig creates a new metadata server from a ServerConfig.
+func NewServerFromConfig(conf *ServerConfig) Server {
+	return NewServer(conf.Port, conf.GcloudPath, conf.ProjectId, conf.NoKey, conf.ServiceAccount)
+}
+
+// NewServerFromConfigFile creates a new metadata server from a ServerConfig.
+func NewServerFromConfigFile(path string) (Server, error) {
+	bs, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("could not open %s: %s", path, err)
+	}
+	conf := &ServerConfig{}
+	err = json.Unmarshal(bs, conf)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse config file: %s", err)
+	}
+	return NewServerFromConfig(conf), nil
 }
 
 type GcloudIdToken struct {
@@ -65,81 +101,53 @@ type AccessToken struct {
 }
 
 func (s *server) getGcloudIdToken(sa, audience string) (*GcloudIdToken, error) {
-	ps := []string{"auth", "print-identity-token"}
-	if sa != "default" && audience != "" {
-		if sa == "" {
-			sa = s.serviceAccount
-		}
-		if sa == "" {
-			return nil, fmt.Errorf("need service account for audiences, please specify one or set server default")
-		}
-		ps = append(ps,
-			fmt.Sprintf("--audiences=%s", audience),
-			fmt.Sprintf("--impersonate-service-account=%s", sa),
-		)
+	if sa == "" {
+		sa = s.serviceAccount
 	}
-	bs, err := s.getGcloudOutput(append(ps, "--format=json"))
-	if err != nil {
-		return nil, err
-	}
-	token := &GcloudIdToken{}
-	err = json.Unmarshal(bs, token)
-	if err != nil {
-		return nil, err
-	}
-	return token, nil
+	return GetGcloudIdToken(s.gcloudPath, sa, audience)
 }
 
-func (s *server) getGcloudAccessToken(sa, audience string) (*AccessToken, error) {
-	ps := []string{"auth", "print-access-token"}
-	if sa != "default" && audience != "" {
-		if sa == "" {
-			sa = s.serviceAccount
-		}
-		if sa == "" {
-			return nil, fmt.Errorf("need service account for audiences, please specify one or set server default")
-		}
-		ps = append(ps,
-			fmt.Sprintf("--audiences=%s", audience),
-			fmt.Sprintf("--impersonate-service-account=%s", sa),
-		)
+func (s *server) getGcloudAccessToken(sa, audience string, scopes []string) (*AccessToken, error) {
+	if sa == "" {
+		sa = s.serviceAccount
 	}
-	bs, err := s.getGcloudOutput(append(ps, "--format=json"))
-	if err != nil {
-		return nil, err
-	}
-	token := &AccessToken{}
-	err = json.Unmarshal(bs, token)
-	if err != nil {
-		return nil, err
-	}
-	return token, nil
+	log.Printf("getting access token for: %s", sa)
+	return GetGcloudAccessToken(s.gcloudPath, sa, audience)
 }
 
 func (s *server) getProjectID() (string, error) {
 	if s.projectId != "" {
 		return s.projectId, nil
 	}
-	bs, err := s.getGcloudOutput([]string{"config", "get-value", "project"})
-	if err != nil {
-		return "", err
-	}
-	str := strings.TrimSpace(string(bs))
-	return str, nil
+	return GetProjectID(s.gcloudPath)
 }
 
-func (s *server) getGcloudOutput(params []string) ([]byte, error) {
-	// TODO(hvl): debug: log.Printf("gcloud %s", strings.Join(params, " "))
-	cmd := exec.Command(s.gcloudPath, params...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	err = cmd.Start()
-	if err != nil {
-		return nil, err
-	}
-	return ioutil.ReadAll(stdout)
+func BadRequest(w http.ResponseWriter, s string) {
+	log.Printf(s)
+	w.Header().Add(HeaderMetadataFlavour, HeaderValueMetadataFlavour)
+	w.WriteHeader(http.StatusBadRequest)
+	_, _ = w.Write([]byte(s))
+}
+
+func InternalServerError(w http.ResponseWriter, bs []byte) {
+	log.Printf(string(bs))
+	w.Header().Add(HeaderMetadataFlavour, HeaderValueMetadataFlavour)
+	w.WriteHeader(http.StatusInternalServerError)
+	_, _ = w.Write(bs)
+}
+
+func Ok(w http.ResponseWriter, contentType string, bs []byte) {
+	w.Header().Add(HeaderMetadataFlavour, HeaderValueMetadataFlavour)
+	w.Header().Add(HeaderContentType, contentType)
+	_, _ = w.Write(bs)
+}
+
+func OkPlainText(w http.ResponseWriter, bs []byte) {
+	Ok(w, HeaderValueTextPlain, bs)
+}
+
+func OkJson(w http.ResponseWriter, bs []byte) {
+	Ok(w, HeaderValueApplicationJson, bs)
 }
 
 func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
@@ -155,36 +163,60 @@ func (s *server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
 
 	token, err := s.getGcloudIdToken(sa, aud)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(err.Error()))
+		InternalServerError(w, []byte(err.Error()))
 		return
 	}
 
-	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
-	_, _ = w.Write([]byte(token.IdToken))
+	OkPlainText(w, []byte(token.IdToken))
 }
 
 func (s *server) handleGetToken(w http.ResponseWriter, r *http.Request) {
 	sa := strings.Split(r.URL.Path, "/")[5]
 	aud := r.URL.Query().Get("audience")
 	if aud != "" && sa == "" {
-		msg := "need both service account and audience (or none at all)"
-		log.Printf(msg)
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(msg))
+		BadRequest(w, "need both service account and audience (or none at all)")
 		return
 	}
-
-	token, err := s.getGcloudAccessToken(sa, aud)
+	scopes := strings.Split(r.URL.Query().Get("scopes"), ",")
+	bs, err := s.getAccessTokenFromSource(scopes)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(err.Error()))
+		InternalServerError(w, []byte(err.Error()))
 		return
 	}
-	bs, _ := json.Marshal(token)
+	OkJson(w, bs)
+}
 
-	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
-	_, _ = w.Write(bs)
+func (s *server) getAccessTokenFromSource(scopes []string) ([]byte, error) {
+	ctx := context.Background()
+	source, err := google.DefaultTokenSource(ctx, scopes...)
+	if err != nil {
+		return nil, fmt.Errorf("error creating token source: %s", err)
+	}
+	t, err := source.Token()
+	if err != nil {
+		return nil, fmt.Errorf("error creating token: %s", err)
+	}
+
+	resp := struct {
+		AccessToken  string `json:"access_token"`
+		ExpiresInSec int    `json:"expires_in"`
+		TokenType    string `json:"token_type"`
+	}{
+		AccessToken:  t.AccessToken,
+		ExpiresInSec: int(t.Expiry.Sub(time.Now()).Seconds()),
+		TokenType:    t.TokenType,
+	}
+	return json.Marshal(resp)
+}
+
+func (s *server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
+	resp := struct {
+		Email string `json:"email"`
+	}{
+		Email: s.serviceAccount,
+	}
+	bs, _ := json.Marshal(resp)
+	OkJson(w, bs)
 }
 
 func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request) {
@@ -194,29 +226,24 @@ func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ps := []string{"config", "get-value", "account"}
-	bs, err := s.getGcloudOutput(ps)
+	bs, err := GetGcloudOutput(s.gcloudPath, ps)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(err.Error()))
+		InternalServerError(w, []byte(err.Error()))
 		return
 	}
 	str := strings.TrimSpace(string(bs))
 
-	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
-	_, _ = w.Write([]byte(str))
+	OkPlainText(w, []byte(str))
 }
 
 func (s *server) handleGetProjectId(w http.ResponseWriter, _ *http.Request) {
 	id, err := s.getProjectID()
 	if err != nil {
-		w.Header().Add("metadata-flavor", "Google")
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(err.Error()))
+		InternalServerError(w, []byte(err.Error()))
 		return
 	}
 
-	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
-	_, _ = w.Write([]byte(id))
+	OkPlainText(w, []byte(id))
 }
 
 func generateApiKey() string {
@@ -288,49 +315,14 @@ func (s *server) isLocal(r *http.Request) bool {
 	return r.Host == "localhost:"+s.port || r.Host == "127.0.0.1:"+s.port
 }
 
-// NewServer creates a new metadata server.
-func NewServer(port, gcloudPath, projectId string, noKey bool, serviceAccount string) Server {
-	apiKey := ""
-	if !noKey {
-		apiKey = generateApiKey()
-	}
-	return &server{
-		port:           port,
-		gcloudPath:     gcloudPath,
-		projectId:      projectId,
-		apiKey:         apiKey,
-		noKey:          noKey,
-		serviceAccount: serviceAccount,
-	}
-}
-
-// NewServerFromConfig creates a new metadata server from a ServerConfig.
-func NewServerFromConfig(conf *ServerConfig) Server {
-	return NewServer(conf.Port, conf.GcloudPath, conf.ProjectId, conf.NoKey, conf.ServiceAccount)
-}
-
-// NewServerFromConfigFile creates a new metadata server from a ServerConfig.
-func NewServerFromConfigFile(path string) (Server, error) {
-	bs, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("could not open %s: %s", path, err)
-	}
-	conf := &ServerConfig{}
-	err = json.Unmarshal(bs, conf)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse config file: %s", err)
-	}
-	return NewServerFromConfig(conf), nil
-}
-
 func notFound(w http.ResponseWriter, r *http.Request) {
 	log.Printf("not found: %s", r.URL)
+	http.NotFound(w, r)
 }
 
 func pong(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
-	w.Header().Add(HeaderMetadataFlavour, HeaderMetadataFlavourValue)
-	w.WriteHeader(http.StatusOK)
+	log.Printf("pong: %s", r.URL)
+	OkPlainText(w, []byte{})
 }
 
 // Run starts the local metadata server.
@@ -358,14 +350,15 @@ func (s *server) Run() error {
 
 	fmt.Println()
 
-	tm := gchttp.NewTreeMux(s.filter(notFound))
+	tm := gchttp.NewTreeMuxWithNotFound(notFound)
 	tm.HandleFunc("/computeMetadata/v1/project/project-id", s.filter(s.handleGetProjectId))
 	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/email", s.filter(s.handleGetAccountEmail))
 	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/identity", s.filter(s.handleGetIdentity))
 	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/token", s.filter(s.handleGetToken))
+	tm.HandleFunc("/computeMetadata/v1/instance/service-accounts/*/", s.filter(s.handleGetAccount))
 
 	// pinged by Python GCE metadata
-	tm.HandleFunc("/", s.filter(pong))
+	tm.HandleFunc("/", pong)
 
 	http.Handle("/", tm)
 	return http.ListenAndServe(":"+s.port, nil)
