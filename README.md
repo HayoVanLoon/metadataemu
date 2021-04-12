@@ -17,32 +17,46 @@ Supported endpoints:
 * `computeMetadata/v1/instance/service-accounts/<service account>/email`
 * `computeMetadata/v1/project/project-id`
 
-
 ## Dependencies
 
 * `gcloud` command line tool
 * Go (1.13 and up)
 
-
 ## Run the Server
 
 Start a server with default options:
+
 ```shell script
 make run
 ```
 
 To see all available command line options:
+
 ```shell script
 go run local/server.go -help
 ```
 
 ## Use the Server
 
+### From the Command Line
+
 ```shell script
 curl  http://localhost:9000/computeEngine/v1/project/project-id
 ```
 
-Using the Go client library:
+### Using Google Client Libraries
+
+The Google client libraries can also be 'tricked' into using this emulator.
+Results might vary as it has been partially reverse-engineered and only tested
+for a limited set of languages (Go, Python) and libraries (Pubsub, Firestore).
+
+The following environment variables need to be set to achieve desired
+functionality. Both `GCE_METADATA_HOST` and `GCE_METADATA_IP` should point to
+server scheme (host & port), i.e. `localhost:9000`. Do not include the
+protocol (aka `http://`).
+
+### Using the Included Library
+
 ```go
 import github.com/HayoVanLoon/metadataemu
 
@@ -52,16 +66,11 @@ client := metadata.NewClient("http://localhost:9000", "my-api-key", false, "my-s
 projectId, err := client.ProjectID()
 ```
 
-The official Google metadata library might also work (for supported endpoints). 
-It uses the environment variable `GCE_METADATA_HOST`, so setting this to the 
-server host (i.e. `localhost:9000`) might work. This has not yet been tested.
-
-
 ## Caveats
 
-* The GCP instance metadata runs in a private network. This server might not. 
-Hence an apiKey query parameter must be added in calls to this server. It is 
-printed to the console on server start-up and refreshes on server restart.
-* When no service account is set and no audience is added, the users default 
-identity token is used and the audience is not limited. Never, ever send this 
-token to an untrusted source or over an untrusted medium. 
+* The GCP instance metadata runs in a private network. This server might not.
+  Hence an apiKey query parameter must be added in calls to this server. It is
+  printed to the console on server start-up and refreshes on server restart.
+* When no service account is set and no audience is added, the users default
+  identity token is used and the audience is not limited. Never, ever send this
+  token to an untrusted source or over an untrusted medium. 

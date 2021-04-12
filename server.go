@@ -206,7 +206,7 @@ func (s *server) handleGetAccountEmail(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(str))
 }
 
-func (s *server) handleGetProjectId(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleGetProjectId(w http.ResponseWriter, _ *http.Request) {
 	id, err := s.getProjectID()
 	if err != nil {
 		w.Header().Add("metadata-flavor", "Google")
@@ -288,7 +288,7 @@ func (s *server) isLocal(r *http.Request) bool {
 	return r.Host == "localhost:"+s.port || r.Host == "127.0.0.1:"+s.port
 }
 
-// Creates a new metadata server.
+// NewServer creates a new metadata server.
 func NewServer(port, gcloudPath, projectId string, noKey bool, serviceAccount string) Server {
 	apiKey := ""
 	if !noKey {
@@ -304,12 +304,12 @@ func NewServer(port, gcloudPath, projectId string, noKey bool, serviceAccount st
 	}
 }
 
-// Creates a new metadata server from a ServerConfig
+// NewServerFromConfig creates a new metadata server from a ServerConfig.
 func NewServerFromConfig(conf *ServerConfig) Server {
 	return NewServer(conf.Port, conf.GcloudPath, conf.ProjectId, conf.NoKey, conf.ServiceAccount)
 }
 
-// Creates a new metadata server from a ServerConfig
+// NewServerFromConfigFile creates a new metadata server from a ServerConfig.
 func NewServerFromConfigFile(path string) (Server, error) {
 	bs, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -333,7 +333,7 @@ func pong(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Starts the local metadata server.
+// Run starts the local metadata server.
 func (s *server) Run() error {
 	fmt.Printf("\nmetadata server listening on:\thttp://localhost:%s\n", s.port)
 	if s.noKey {
