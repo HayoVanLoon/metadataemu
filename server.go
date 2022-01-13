@@ -108,6 +108,7 @@ func (s *server) getGcloudIdToken(sa, audience string) (*GcloudIdToken, error) {
 }
 
 func (s *server) getGcloudAccessToken(sa, audience string, scopes []string) (*AccessToken, error) {
+	// TODO(hvl, 2022-01-13): gcloud has no support for flexible scopes
 	if sa == "" {
 		sa = s.serviceAccount
 	}
@@ -209,7 +210,7 @@ func (s *server) getAccessTokenFromSource(scopes []string) ([]byte, error) {
 	return json.Marshal(resp)
 }
 
-func (s *server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleGetAccount(w http.ResponseWriter, _ *http.Request) {
 	resp := struct {
 		Email string `json:"email"`
 	}{
