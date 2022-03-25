@@ -1,3 +1,9 @@
+// Copyright 2022 Hayo van Loon. All rights reserved.
+// Use of this source code is governed by a licence
+// that can be found in the LICENSE file.
+
+// Package metadataemu provides a (limited) emulator for the Google Cloud
+// Compute metadata servers.
 package metadataemu
 
 import (

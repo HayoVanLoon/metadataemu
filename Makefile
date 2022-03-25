@@ -1,3 +1,6 @@
+# Copyright 2021 Hayo van Loon.
+# Use of this source code is governed by an Apache-style
+# license that can be found in the LICENSE file.
 
 PORT := 9000
 GCLOUD_PATH := $(shell which gcloud)
