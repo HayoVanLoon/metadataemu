@@ -55,10 +55,11 @@
 **.credentials
 **.credentials.json
 
+**/.private
+
 personal-envs.sh
 
 ################################
 # Project Specific
 ################################
-local-maven-repo
 
